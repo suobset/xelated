@@ -11,22 +11,77 @@ final class JobCoordinator {
         case idle
         case scanning(found: Int)
         case scanned
+        case backingUp(BackupProgress)
+        case finished(BackupOutcome)
         case failed(String)
 
         var isScanning: Bool {
             if case .scanning = self { return true }
             return false
         }
+
+        var isBackingUp: Bool {
+            if case .backingUp = self { return true }
+            return false
+        }
+
+        var isBusy: Bool { isScanning || isBackingUp }
     }
 
     private(set) var phase: Phase = .idle
     private(set) var scan = ScanResult()
     private(set) var sourceFolder: URL?
+    private(set) var setupError: String?
+
+    /// Remembered between launches — the same drive folder usually gets reused.
+    private(set) var driveDestination: URL? {
+        didSet {
+            UserDefaults.standard.set(
+                driveDestination?.path(percentEncoded: false),
+                forKey: Self.driveDestinationKey
+            )
+        }
+    }
+
+    private static let driveDestinationKey = "driveDestination"
 
     private let scanner = SourceScanner()
-    private var scanTask: Task<Void, Never>?
+    private var ledger: BackupLedger?
+    private var driveBackup: DriveBackupService?
+    private var task: Task<Void, Never>?
 
-    func selectSource(_ url: URL) {
+    var canBackUp: Bool {
+        !scan.items.isEmpty && driveDestination != nil && !phase.isBusy && ledger != nil
+    }
+
+    /// True when the remembered destination isn't reachable — usually an unplugged drive.
+    var destinationIsMissing: Bool {
+        guard let driveDestination else { return false }
+        return !FileManager.default.fileExists(atPath: driveDestination.path)
+    }
+
+    init() {
+        if let path = UserDefaults.standard.string(forKey: Self.driveDestinationKey) {
+            driveDestination = URL(filePath: path)
+        }
+        do {
+            let ledger = try BackupLedger(directory: try BackupLedger.defaultDirectory())
+            self.ledger = ledger
+            self.driveBackup = DriveBackupService(ledger: ledger)
+        } catch {
+            setupError = "Couldn't open the backup ledger: \(error.localizedDescription)"
+        }
+    }
+
+    // MARK: - Source
+
+    func chooseSource() {
+        guard let url = FolderPicker.choose(
+            title: "Choose Source",
+            message: "Pick the folder of photos and videos to back up.",
+            startingAt: sourceFolder
+        ) else { return }
+
         sourceFolder = url
         startScan()
     }
@@ -34,11 +89,11 @@ final class JobCoordinator {
     func startScan() {
         guard let sourceFolder else { return }
 
-        scanTask?.cancel()
+        task?.cancel()
         scan = ScanResult()
         phase = .scanning(found: 0)
 
-        scanTask = Task {
+        task = Task {
             do {
                 let result = try await scanner.scan(directory: sourceFolder) { found in
                     Task { @MainActor in
@@ -56,8 +111,46 @@ final class JobCoordinator {
         }
     }
 
-    func cancelScan() {
-        scanTask?.cancel()
-        scanTask = nil
+    // MARK: - Destination
+
+    func chooseDriveDestination() {
+        guard let url = FolderPicker.choose(
+            title: "Choose Backup Destination",
+            message: "Pick a folder on the external drive, or make a new one. "
+                + "Anything already in it is left alone.",
+            startingAt: driveDestination ?? URL(filePath: "/Volumes")
+        ) else { return }
+
+        driveDestination = url
+    }
+
+    // MARK: - Backup
+
+    func startDriveBackup() {
+        guard let driveBackup, let driveDestination, !scan.items.isEmpty else { return }
+
+        task?.cancel()
+        phase = .backingUp(BackupProgress(total: scan.items.count))
+
+        let items = scan.items
+        task = Task {
+            do {
+                let outcome = try await driveBackup.backUp(items: items, to: driveDestination) { progress in
+                    Task { @MainActor in
+                        if self.phase.isBackingUp { self.phase = .backingUp(progress) }
+                    }
+                }
+                phase = .finished(outcome)
+            } catch is CancellationError {
+                phase = .scanned
+            } catch {
+                phase = .failed(error.localizedDescription)
+            }
+        }
+    }
+
+    func cancel() {
+        task?.cancel()
+        task = nil
     }
 }

@@ -1,61 +1,90 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct ContentView: View {
     @State private var coordinator = JobCoordinator()
-    @State private var isChoosingSource = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sourceSection
-                .padding()
-            Divider()
-            resultsSection
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .frame(minWidth: 560, minHeight: 440)
-        .fileImporter(
-            isPresented: $isChoosingSource,
-            allowedContentTypes: [.folder]
-        ) { result in
-            if case .success(let url) = result {
-                coordinator.selectSource(url)
+            VStack(alignment: .leading, spacing: 12) {
+                if let setupError = coordinator.setupError {
+                    Label(setupError, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                }
+                locationRow(
+                    title: "Source",
+                    path: coordinator.sourceFolder?.path(percentEncoded: false),
+                    placeholder: "No folder chosen",
+                    action: coordinator.chooseSource
+                )
+                locationRow(
+                    title: "External Drive",
+                    path: coordinator.driveDestination?.path(percentEncoded: false),
+                    placeholder: "No destination chosen",
+                    warning: coordinator.destinationIsMissing ? "Not connected" : nil,
+                    action: coordinator.chooseDriveDestination
+                )
             }
+            .padding()
+
+            Divider()
+            content
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            Divider()
+
+            HStack {
+                if coordinator.phase.isBusy {
+                    Button("Cancel", role: .cancel) { coordinator.cancel() }
+                }
+                Spacer()
+                Button("Back Up to Drive") { coordinator.startDriveBackup() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!coordinator.canBackUp)
+            }
+            .padding()
         }
+        .frame(minWidth: 600, minHeight: 480)
     }
 
-    private var sourceSection: some View {
+    private func locationRow(
+        title: String,
+        path: String?,
+        placeholder: String,
+        warning: String? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Source")
-                    .font(.headline)
-                Text(coordinator.sourceFolder?.path(percentEncoded: false) ?? "No folder chosen")
+                HStack(spacing: 6) {
+                    Text(title).font(.headline)
+                    if let warning {
+                        Text(warning)
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+                Text(path ?? placeholder)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.head)
             }
             Spacer()
-            if coordinator.phase.isScanning {
-                Button("Cancel", role: .cancel) { coordinator.cancelScan() }
-            }
-            Button("Choose Folder…") { isChoosingSource = true }
+            Button(path == nil ? "Choose…" : "Change…", action: action)
+                .disabled(coordinator.phase.isBusy)
         }
     }
 
     @ViewBuilder
-    private var resultsSection: some View {
+    private var content: some View {
         switch coordinator.phase {
         case .idle:
             placeholder("Choose a folder of photos and videos to get started.")
 
         case .scanning(let found):
-            VStack(spacing: 8) {
+            centred {
                 ProgressView()
-                Text("Scanning… \(found) found")
-                    .foregroundStyle(.secondary)
+                Text("Scanning… \(found) found").foregroundStyle(.secondary)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         case .failed(let message):
             placeholder(message)
@@ -66,7 +95,57 @@ struct ContentView: View {
             } else {
                 itemList
             }
+
+        case .backingUp(let progress):
+            centred {
+                ProgressView(value: progress.fraction)
+                    .frame(maxWidth: 320)
+                Text("\(progress.completed) of \(progress.total)")
+                    .monospacedDigit()
+                if let filename = progress.currentFilename {
+                    Text(filename)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+        case .finished(let outcome):
+            finishedView(outcome)
         }
+    }
+
+    private func finishedView(_ outcome: BackupOutcome) -> some View {
+        let progress = outcome.progress
+        return VStack(alignment: .leading, spacing: 12) {
+            Label("Backup complete", systemImage: "checkmark.circle")
+                .font(.headline)
+                .foregroundStyle(progress.failed == 0 ? .green : .orange)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(progress.copied) copied — \(progress.bytesCopied.formatted(.byteCount(style: .file)))")
+                if progress.alreadyPresent > 0 {
+                    Text("\(progress.alreadyPresent) already on the drive, left untouched")
+                        .foregroundStyle(.secondary)
+                }
+                if progress.failed > 0 {
+                    Text("\(progress.failed) failed").foregroundStyle(.orange)
+                }
+            }
+
+            if !outcome.failures.isEmpty {
+                List(outcome.failures) { failure in
+                    VStack(alignment: .leading) {
+                        Text(failure.filename)
+                        Text(failure.reason)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            Spacer()
+        }
+        .padding()
     }
 
     private var itemList: some View {
@@ -113,6 +192,11 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    private func centred<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 8, content: content)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func placeholder(_ message: String) -> some View {
