@@ -152,7 +152,10 @@ actor AndroidBackupService {
             let remotePath = "\(ADBClient.remoteDirectory)/\(name)"
 
             do {
-                try await adb.push(serial: serial, localURL: item.sourceURL, remotePath: remotePath)
+                try await adb.push(
+                    serial: serial, localURL: item.sourceURL, remotePath: remotePath,
+                    byteSize: item.byteSize
+                )
 
                 // adb push exits 0 on a partial transfer in some failure modes, so
                 // confirm the byte count landed rather than trusting the exit status.
@@ -183,7 +186,12 @@ actor AndroidBackupService {
             onProgress(outcome.progress)
         }
 
-        try await adb.requestMediaScan(serial: serial)
+        // Fire-and-forget: recent Android indexes anything written through the FUSE
+        // layer automatically, so this is only a nudge. Not awaiting it means a slow or
+        // wedged scan can never delay showing the handoff screen.
+        let adb = self.adb
+        Task { try? await adb.requestMediaScan(serial: serial) }
+
         try await ledger.sync()
         return outcome
     }

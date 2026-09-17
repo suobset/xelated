@@ -67,7 +67,7 @@ struct HandoffView: View {
         GroupBox {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text(handoff.hint.summary)
+                    Text(handoff.hasCheckedStagedFiles ? handoff.hint.summary : "Checking the phone…")
                         .font(.subheadline)
                     Spacer()
                     Button(action: onRefresh) {
@@ -90,9 +90,12 @@ struct HandoffView: View {
 
                 Divider()
 
-                Text("\(handoff.stagedFiles.count) files still in the staging folder on the phone")
+                Text(stagedFilesSummary)
                     .font(.subheadline)
-                    .foregroundStyle(handoff.stagedFiles.isEmpty ? .secondary : .primary)
+                    .foregroundStyle(
+                        handoff.hasCheckedStagedFiles && !handoff.stagedFiles.isEmpty
+                            ? .primary : .secondary
+                    )
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -107,7 +110,7 @@ struct HandoffView: View {
                 Button("Continue (Already Cleared)") {
                     onDecision(.continueWithoutClearing)
                 }
-                .disabled(!handoff.stagedFiles.isEmpty)
+                .disabled(!handoff.hasCheckedStagedFiles || !handoff.stagedFiles.isEmpty)
 
                 Spacer()
 
@@ -115,13 +118,17 @@ struct HandoffView: View {
             }
 
             Text(
-                handoff.stagedFiles.isEmpty
-                    ? "The staging folder is empty, so this batch looks cleared."
-                    : "Clearing deletes only the \(handoff.stagedFiles.count) files in "
-                        + "Xelated's own folder on the phone. Nothing else is touched."
+                "Clearing deletes only what's in Xelated's own folder on the phone. "
+                + "Nothing else is touched. \"Clear Phone & Continue\" works even if the "
+                + "check above is still running or couldn't reach the phone."
             )
             .font(.caption)
             .foregroundStyle(.secondary)
         }
+    }
+
+    private var stagedFilesSummary: String {
+        guard handoff.hasCheckedStagedFiles else { return "Checking what's on the phone…" }
+        return "\(handoff.stagedFiles.count) files still in the staging folder on the phone"
     }
 }

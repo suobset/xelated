@@ -106,4 +106,69 @@ struct ADBClientTests {
         // and DCIM subfolders are what they look for.
         #expect(ADBClient.remoteDirectory.hasPrefix("/sdcard/DCIM/"))
     }
+
+    // MARK: - Regression: the 2026-09-17 hang
+
+    // `exec` matters here: without it, `sh -c` forks `sleep` as a genuine child rather
+    // than replacing itself, and killing the shell's pid — even with SIGKILL — leaves
+    // that orphaned child running for its full duration with our pipe's write end still
+    // open underneath it (confirmed by hand: `sh -c 'trap "" TERM; sleep N'`,
+    // `kill -9`'d, leaves `sleep` alive and the pipe unclosed). `exec` replaces the
+    // shell in place, so there's exactly one process — matching a real `adb` client,
+    // which is confirmed to never fork local children of its own.
+    private static let stubbornProcessScript = "trap '' TERM; exec sleep 30"
+
+    @Test("A process that ignores SIGTERM is still killed")
+    func processIgnoringSigtermIsStillKilled() async throws {
+        // Terminate() alone does nothing to a process that ignores SIGTERM, so without
+        // escalating to SIGKILL the pipe read below would never see EOF and this call
+        // would hang forever — taking every other adb operation down with it, since
+        // nothing distinguishes this call from any other. If this test times out rather
+        // than completing quickly, the escalation regressed.
+        let elapsed = try await ContinuousClock().measure {
+            _ = try await shell.run(["-c", Self.stubbornProcessScript], timeout: .seconds(1))
+        }
+        #expect(elapsed < .seconds(10))
+    }
+
+    @Test("Cancellation kills a process that ignores SIGTERM")
+    func cancellationKillsStubbornProcess() async throws {
+        // Mirrors what happens when the user presses Cancel while an adb call that
+        // won't die gracefully is in flight.
+        let task = Task {
+            try await shell.run(["-c", Self.stubbornProcessScript], timeout: .seconds(60))
+        }
+        try await Task.sleep(for: .milliseconds(200))
+        task.cancel()
+
+        let elapsed = try await ContinuousClock().measure {
+            _ = try? await task.value
+        }
+        #expect(elapsed < .seconds(10))
+    }
+
+    @Test("Independent calls don't serialize behind one another")
+    func callsRunConcurrentlyNotSerially() async throws {
+        // ADBClient used to be an actor with no mutable state to protect, which meant
+        // every call queued behind whichever one happened to be running — including a
+        // stuck one. If two independent one-second calls take close to two seconds
+        // combined rather than close to one, that serialization is back.
+        let elapsed = try await ContinuousClock().measure {
+            async let first = shell.run(["-c", "sleep 1"], timeout: .seconds(10))
+            async let second = shell.run(["-c", "sleep 1"], timeout: .seconds(10))
+            _ = try await (first, second)
+        }
+        #expect(elapsed < .seconds(3), "the two calls should overlap, not queue")
+    }
+
+    @Test("Push timeout has a floor for small files and scales for large ones")
+    func pushTimeoutCalculation() {
+        #expect(ADBClient.pushTimeout(forBytes: 0) == .seconds(60))
+        #expect(ADBClient.pushTimeout(forBytes: 1_000) == .seconds(60))
+
+        // 5 GB at the 500 KB/s floor is 10,000 seconds — finite, but generous enough
+        // not to falsely kill a real, slow-but-progressing transfer.
+        let fiveGB: Int64 = 5_000_000_000
+        #expect(ADBClient.pushTimeout(forBytes: fiveGB) == .seconds(10_000))
+    }
 }

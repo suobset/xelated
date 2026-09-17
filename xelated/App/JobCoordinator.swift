@@ -11,7 +11,11 @@ nonisolated struct HandoffState: Sendable, Equatable {
     var remainingBytes: Int64 = 0
     var stagedFiles: [String] = []
     var hint: ADBClient.BackupHint = .indeterminate
-    var isRefreshing = false
+    var isRefreshing = true
+    /// False until the staging folder has actually been checked at least once. Gates
+    /// "Continue (Already Cleared)" — an empty `stagedFiles` shouldn't enable it before
+    /// that emptiness has been confirmed, it's just the field's default value.
+    var hasCheckedStagedFiles = false
 }
 
 nonisolated enum HandoffDecision: Sendable, Equatable {
@@ -270,17 +274,22 @@ final class JobCoordinator {
                     let stillToGo = await androidBackup.outstanding(from: items)
                         .filter { candidate in !outcome.pushedItems.contains(candidate) }
 
-                    var handoff = HandoffState(
-                        batchNumber: batchNumber,
-                        pushedCount: outcome.progress.pushed,
-                        pushedBytes: outcome.progress.bytesPushed,
-                        failedCount: outcome.progress.failed,
-                        remainingCount: stillToGo.count,
-                        remainingBytes: stillToGo.reduce(0) { $0 + $1.byteSize }
+                    // Show the handoff screen the instant the batch finishes pushing —
+                    // don't make it wait on the staging-folder listing or the
+                    // notification check. Those are diagnostics, not prerequisites for
+                    // clicking through, and a slow or wedged phone shouldn't be able to
+                    // block the one screen with a Stop button on it.
+                    phase = .awaitingHandoff(
+                        HandoffState(
+                            batchNumber: batchNumber,
+                            pushedCount: outcome.progress.pushed,
+                            pushedBytes: outcome.progress.bytesPushed,
+                            failedCount: outcome.progress.failed,
+                            remainingCount: stillToGo.count,
+                            remainingBytes: stillToGo.reduce(0) { $0 + $1.byteSize }
+                        )
                     )
-                    handoff.stagedFiles = (try? await androidBackup.stagedFiles(serial: serial)) ?? []
-                    handoff.hint = await androidBackup.backupHint(serial: serial)
-                    phase = .awaitingHandoff(handoff)
+                    refreshHandoffStatus()
 
                     let decision = await awaitHandoff()
                     guard decision != .stop else { break }
@@ -329,6 +338,10 @@ final class JobCoordinator {
     }
 
     /// Re-check the phone while the handoff prompt is up, without resuming the loop.
+    ///
+    /// Safe to call whether or not a previous check is still in flight: `ADBClient`
+    /// calls don't serialize against each other, so an earlier slow check simply gets
+    /// its result discarded (via the `phase` guard below) rather than blocking this one.
     func refreshHandoffStatus() {
         guard case .awaitingHandoff(var handoff) = phase,
               let androidBackup, let serial = selectedDeviceSerial
@@ -345,6 +358,7 @@ final class JobCoordinator {
             current.stagedFiles = staged
             current.hint = hint
             current.isRefreshing = false
+            current.hasCheckedStagedFiles = true
             phase = .awaitingHandoff(current)
         }
     }

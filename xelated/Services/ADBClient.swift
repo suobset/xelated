@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 nonisolated struct AndroidDevice: Sendable, Identifiable, Hashable {
@@ -49,7 +50,14 @@ nonisolated enum ADBError: LocalizedError {
 ///
 /// Works with any Android device, not just a Pixel — the phone is only acting as an
 /// upload mule for whichever photo service is set to back up its camera folder.
-actor ADBClient {
+///
+/// A plain `Sendable` class, not an actor: it holds no mutable state, and every call
+/// spawns its own independent `Process`. Concurrent `adb` invocations against the same
+/// device are normal and well-supported. Making this an actor would buy nothing but a
+/// single point of failure — one stuck call (a wedged `dumpsys`, a stalled push) would
+/// serialize behind it forever, freezing every other adb operation including the ones
+/// Cancel would need to make.
+final class ADBClient: Sendable {
     /// Staging folder on the device. Sitting under DCIM matters: photo apps treat DCIM
     /// subfolders as camera folders and offer to back them up, which is the whole point.
     static let remoteDirectory = "/sdcard/DCIM/Xelated"
@@ -64,14 +72,14 @@ actor ADBClient {
 
     // MARK: - Device discovery
 
-    func checkAvailable() throws {
+    func checkAvailable() async throws {
         guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
             throw ADBError.adbNotFound(executableURL)
         }
     }
 
     func devices() async throws -> [AndroidDevice] {
-        try checkAvailable()
+        try await checkAvailable()
         let result = try await run(["devices", "-l"], timeout: .seconds(20))
         try result.throwIfFailed(command: "devices")
 
@@ -131,13 +139,25 @@ actor ADBClient {
         try result.throwIfFailed(command: "mkdir -p")
     }
 
-    /// Push one file. No timeout — a large video over USB 2 legitimately takes minutes.
-    func push(serial: String, localURL: URL, remotePath: String) async throws {
+    /// Push one file.
+    ///
+    /// The timeout is generous and scales with size rather than being absent: a large
+    /// video over USB 2 legitimately takes minutes, but a transfer that's genuinely
+    /// stalled — a half-unplugged cable, a suspended USB port, a wedged phone — needs to
+    /// fail eventually and get retried next run, rather than hang forever.
+    func push(serial: String, localURL: URL, remotePath: String, byteSize: Int64) async throws {
         let result = try await run(
             ["-s", serial, "push", localURL.path(percentEncoded: false), remotePath],
-            timeout: nil
+            timeout: Self.pushTimeout(forBytes: byteSize)
         )
         try result.throwIfFailed(command: "push")
+    }
+
+    /// A conservative floor of 500 KB/s — well below what even a bad USB 2 connection
+    /// should sustain — with a 60-second minimum so tiny files aren't cut close.
+    static func pushTimeout(forBytes bytes: Int64) -> Duration {
+        let minimumBytesPerSecond = 500_000.0
+        return .seconds(max(60, Double(bytes) / minimumBytesPerSecond))
     }
 
     /// Size of a file on the device, or nil if it isn't there.
@@ -267,7 +287,7 @@ actor ADBClient {
     }
 
     func run(_ arguments: [String], timeout: Duration?) async throws -> CommandResult {
-        try checkAvailable()
+        try await checkAvailable()
 
         let process = Process()
         process.executableURL = executableURL
@@ -284,7 +304,7 @@ actor ADBClient {
         let timeoutTask: Task<Void, Never>? = timeout.map { limit in
             Task {
                 try? await Task.sleep(for: limit)
-                if process.isRunning { process.terminate() }
+                if process.isRunning { Self.forceTerminate(process) }
             }
         }
         defer { timeoutTask?.cancel() }
@@ -297,7 +317,7 @@ actor ADBClient {
             async let stderr = Self.readToEnd(errPipe)
             return await (stdout, stderr)
         } onCancel: {
-            process.terminate()
+            Self.forceTerminate(process)
         }
 
         process.waitUntilExit()  // both pipes are at EOF, so this returns promptly
@@ -308,6 +328,29 @@ actor ADBClient {
             stdout: String(decoding: outData, as: UTF8.self),
             stderr: String(decoding: errData, as: UTF8.self)
         )
+    }
+
+    /// Sends SIGTERM, then escalates to SIGKILL if the process hasn't died within a
+    /// short grace period.
+    ///
+    /// SIGTERM alone isn't reliable here: an `adb` invocation wedged on a stalled USB
+    /// transfer or an unresponsive shell on the phone can simply not respond to it. When
+    /// that happens the pipe reads below never see EOF, `run` never returns, and — since
+    /// nothing else about this call is special — every other adb operation waiting on
+    /// the same underlying connection effectively wedges too. SIGKILL cannot be caught
+    /// or ignored, so this is what actually guarantees the timeout (and cancellation)
+    /// have teeth.
+    private static func forceTerminate(_ process: Process) {
+        guard process.isRunning else { return }
+        process.terminate()
+
+        let pid = process.processIdentifier
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            if process.isRunning {
+                kill(pid, SIGKILL)
+            }
+        }
     }
 
     private static func readToEnd(_ pipe: Pipe) async -> Data {
