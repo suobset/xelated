@@ -73,11 +73,13 @@ actor BackupLedger {
         index.values.filter { $0.destination == destination }
     }
 
-    /// Items pushed to the Pixel but never confirmed as uploaded — what to re-offer
+    /// Items pushed to the phone but never confirmed as uploaded — what to re-offer
     /// after the app was quit mid-batch.
     func unconfirmedPushes() -> [LedgerEntry] {
         index.values.filter { entry in
-            guard entry.destination == .pixel, case .pushed = entry.state else { return false }
+            guard entry.destination == .androidDevice, case .pushed = entry.state else {
+                return false
+            }
             return true
         }
     }

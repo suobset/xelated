@@ -2,7 +2,8 @@ import Foundation
 
 nonisolated enum DestinationKind: String, Codable, Sendable, CaseIterable {
     case drive
-    case pixel
+    /// Any Android phone acting as an upload mule for a photo service.
+    case androidDevice = "android"
 }
 
 /// Where a single item stands with respect to one destination.
@@ -10,9 +11,9 @@ nonisolated enum ItemState: Codable, Sendable, Equatable {
     case pending
     /// Copied to the external drive, at a path relative to the destination root.
     case copied(relativePath: String, at: Date)
-    /// Pushed onto the Pixel but not yet known to be in Google Photos.
+    /// Sitting on the phone, but not yet known to have reached the cloud.
     case pushed(devicePath: String, at: Date)
-    /// The person confirmed Google Photos finished with this batch.
+    /// The person confirmed the photo service finished with this batch.
     ///
     /// User-asserted, not machine-verified — the Mac has no way to see into Google
     /// Photos' upload queue. Treated as authoritative, but recorded as an assertion so
