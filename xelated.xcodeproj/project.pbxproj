@@ -8,6 +8,7 @@
 
 /* Begin PBXFileReference section */
 		000000000000000000000120 /* xelated.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = xelated.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C5849C7D305B81B500449DFA /* xelatedTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = xelatedTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -16,10 +17,20 @@
 			path = xelated;
 			sourceTree = "<group>";
 		};
+		C5849C7E305B81B500449DFA /* xelatedTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = xelatedTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		000000000000000130000000 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		C5849C7A305B81B500449DFA /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 			);
@@ -31,6 +42,7 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000010 /* xelated */,
+				C5849C7E305B81B500449DFA /* xelatedTests */,
 				000000000000000000000020 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -39,6 +51,7 @@
 			isa = PBXGroup;
 			children = (
 				000000000000000000000120 /* xelated.app */,
+				C5849C7D305B81B500449DFA /* xelatedTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -64,6 +77,24 @@
 			productReference = 000000000000000000000120 /* xelated.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C5849C7C305B81B500449DFA /* xelatedTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C5849C81305B81B500449DFA /* Build configuration list for PBXNativeTarget "xelatedTests" */;
+			buildPhases = (
+				C5849C79305B81B500449DFA /* Sources */,
+				C5849C7A305B81B500449DFA /* Frameworks */,
+				C5849C7B305B81B500449DFA /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				C5849C7E305B81B500449DFA /* xelatedTests */,
+			);
+			name = xelatedTests;
+			productName = xelatedTests;
+			productReference = C5849C7D305B81B500449DFA /* xelatedTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -71,11 +102,14 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2630;
+				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					000000000000000100000000 = {
 						CreatedOnToolsVersion = 26.3;
+					};
+					C5849C7C305B81B500449DFA = {
+						CreatedOnToolsVersion = 27.0;
 					};
 				};
 			};
@@ -94,6 +128,7 @@
 			projectRoot = "";
 			targets = (
 				000000000000000100000000 /* xelated */,
+				C5849C7C305B81B500449DFA /* xelatedTests */,
 			);
 		};
 /* End PBXProject section */
@@ -104,10 +139,20 @@
 			files = (
 			);
 		};
+		C5849C7B305B81B500449DFA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		000000000000000120000000 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		C5849C79305B81B500449DFA /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
 			);
@@ -329,6 +374,54 @@
 			};
 			name = Release;
 		};
+		C5849C82305B81B500449DFA /* Debug configuration for PBXNativeTarget "xelatedTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.suobset.xelatedTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/xelated.app/Contents/MacOS/xelated";
+				XROS_DEPLOYMENT_TARGET = 27.0;
+			};
+			name = Debug;
+		};
+		C5849C83305B81B500449DFA /* Release configuration for PBXNativeTarget "xelatedTests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MACOSX_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.suobset.xelatedTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/xelated.app/Contents/MacOS/xelated";
+				XROS_DEPLOYMENT_TARGET = 27.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -345,6 +438,14 @@
 			buildConfigurations = (
 				000000000000000111000000 /* Debug configuration for PBXNativeTarget "xelated" */,
 				000000000000000112000000 /* Release configuration for PBXNativeTarget "xelated" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		C5849C81305B81B500449DFA /* Build configuration list for PBXNativeTarget "xelatedTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C5849C82305B81B500449DFA /* Debug configuration for PBXNativeTarget "xelatedTests" */,
+				C5849C83305B81B500449DFA /* Release configuration for PBXNativeTarget "xelatedTests" */,
 			);
 			defaultConfigurationName = Release;
 		};
