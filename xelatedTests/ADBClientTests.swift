@@ -100,11 +100,13 @@ struct ADBClientTests {
         await #expect(throws: ADBError.self) { _ = try await missing.devices() }
     }
 
-    @Test("The staging folder lives under DCIM")
-    func stagingFolderIsUnderDCIM() {
-        // Photo apps only offer to back up folders they recognise as camera folders,
-        // and DCIM subfolders are what they look for.
-        #expect(ADBClient.remoteDirectory.hasPrefix("/sdcard/DCIM/"))
+    @Test("The staging folder lives under Pictures, not DCIM")
+    func stagingFolderIsUnderPictures() {
+        // Confirmed against a real Pixel: Google Photos' "Back up other device folders"
+        // picker only lists subfolders under Pictures. DCIM subfolders never appeared —
+        // DCIM is treated as the primary Camera backup source and seems to be excluded
+        // from the separate picker to avoid overlapping with that toggle.
+        #expect(ADBClient.remoteDirectory.hasPrefix("/sdcard/Pictures/"))
     }
 
     // MARK: - Regression: the 2026-09-17 hang

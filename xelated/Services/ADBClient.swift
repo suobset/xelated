@@ -58,9 +58,14 @@ nonisolated enum ADBError: LocalizedError {
 /// serialize behind it forever, freezing every other adb operation including the ones
 /// Cancel would need to make.
 final class ADBClient: Sendable {
-    /// Staging folder on the device. Sitting under DCIM matters: photo apps treat DCIM
-    /// subfolders as camera folders and offer to back them up, which is the whole point.
-    static let remoteDirectory = "/sdcard/DCIM/Xelated"
+    /// Staging folder on the device.
+    ///
+    /// Confirmed against a real Pixel running Storage Saver: Google Photos' "Back up
+    /// other device folders" picker only lists subfolders under `Pictures`. DCIM was
+    /// tried first and never appeared as an option — Google Photos treats DCIM as the
+    /// primary Camera backup source and apparently excludes its subfolders from the
+    /// separate "other folders" picker to avoid overlapping with that toggle.
+    static let remoteDirectory = "/sdcard/Pictures/Xelated"
 
     static let defaultExecutable = URL(filePath: "/opt/homebrew/bin/adb")
 
