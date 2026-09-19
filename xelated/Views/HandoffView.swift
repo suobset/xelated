@@ -118,9 +118,10 @@ struct HandoffView: View {
             }
 
             Text(
-                "Clearing deletes only what's in Xelated's own folder on the phone. "
-                + "Nothing else is touched. \"Clear Phone & Continue\" works even if the "
-                + "check above is still running or couldn't reach the phone."
+                "Clearing deletes only the files Xelated itself put on the phone — even "
+                + "other files already sitting in the same folder are left alone. "
+                + "\"Clear Phone & Continue\" works even if the check above is still "
+                + "running or couldn't reach the phone."
             )
             .font(.caption)
             .foregroundStyle(.secondary)

@@ -61,11 +61,17 @@ final class ADBClient: Sendable {
     /// Staging folder on the device.
     ///
     /// Confirmed against a real Pixel running Storage Saver: Google Photos' "Back up
-    /// other device folders" picker only lists subfolders under `Pictures`. DCIM was
-    /// tried first and never appeared as an option — Google Photos treats DCIM as the
-    /// primary Camera backup source and apparently excludes its subfolders from the
-    /// separate "other folders" picker to avoid overlapping with that toggle.
-    static let remoteDirectory = "/sdcard/Pictures/Xelated"
+    /// other device folders" picker only lists a small set of OS-blessed folders
+    /// (Camera, Screenshots) unless the app holds "All files access" — and recent
+    /// Google Photos versions don't expose a Settings toggle for that permission at
+    /// all, so it can't be granted even by hand. A custom `Pictures/Xelated` folder
+    /// was tried first and, consistent with that, never appeared as an option. Reusing
+    /// the real Screenshots folder was the one thing confirmed to actually show up.
+    ///
+    /// Because this is a folder the phone itself writes real screenshots into,
+    /// `AndroidBackupService` tracks exactly which remote paths Xelated pushed via the
+    /// ledger and only ever touches those — see `unconfirmedRemotePaths()`.
+    static let remoteDirectory = "/sdcard/Pictures/Screenshots"
 
     static let defaultExecutable = URL(filePath: "/opt/homebrew/bin/adb")
 

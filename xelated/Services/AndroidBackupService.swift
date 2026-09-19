@@ -206,19 +206,47 @@ actor AndroidBackupService {
 
     // MARK: - Handoff
 
-    /// What's still sitting in the staging folder.
-    func stagedFiles(serial: String) async throws -> [String] {
-        try await adb.listRemoteDirectory(serial: serial)
+    /// Remote paths of items pushed this run (or an earlier one) that haven't been
+    /// confirmed uploaded yet — tracked through the ledger, not by asking the device
+    /// what's in the folder.
+    ///
+    /// This matters because the staging directory can be a folder the phone itself
+    /// writes into: Google Photos' "Back up other device folders" picker only lists a
+    /// small set of OS-blessed folders (Camera, Screenshots) unless the app holds "All
+    /// files access", which recent Google Photos versions don't even expose a toggle
+    /// for — so Screenshots is sometimes the only real option. Whatever's in that
+    /// folder that Xelated didn't put there must never be touched.
+    private func unconfirmedRemotePaths() async -> [String] {
+        await ledger.unconfirmedPushes().compactMap { entry in
+            guard case .pushed(let devicePath, _) = entry.state else { return nil }
+            return devicePath
+        }
     }
 
-    /// Delete the staging folder's contents. Only ever touches Xelated's own folder.
+    /// Of what Xelated pushed and hasn't confirmed yet, what's still actually present on
+    /// the device — distinguishing "nothing to clear" from "the person already cleared
+    /// it themselves" without ever counting files that aren't ours.
+    func stagedFiles(serial: String) async throws -> [String] {
+        let ours = await unconfirmedRemotePaths()
+        guard !ours.isEmpty else { return [] }
+        let present = try await adb.listRemoteDirectory(serial: serial)
+        return Self.filesStillPresent(ours: ours, present: present)
+    }
+
+    /// Filters `present` (a directory listing) down to just the filenames Xelated
+    /// pushed. Exposed as a pure function so the safety property — files that aren't
+    /// ours are never included — can be checked without a device attached.
+    static func filesStillPresent(ours: [String], present: [String]) -> [String] {
+        let ourFilenames = Set(ours.map { ($0 as NSString).lastPathComponent })
+        return present.filter { ourFilenames.contains($0) }
+    }
+
+    /// Delete only what Xelated itself pushed and hasn't confirmed uploaded — never
+    /// anything else that happens to share the folder.
     func clearStagingFolder(serial: String) async throws {
-        let names = try await adb.listRemoteDirectory(serial: serial)
-        guard !names.isEmpty else { return }
-        try await adb.removeRemoteFiles(
-            serial: serial,
-            paths: names.map { "\(ADBClient.remoteDirectory)/\($0)" }
-        )
+        let paths = await unconfirmedRemotePaths()
+        guard !paths.isEmpty else { return }
+        try await adb.removeRemoteFiles(serial: serial, paths: paths)
     }
 
     /// Record that the person confirmed these reached the cloud.
