@@ -89,6 +89,59 @@ struct BackupLedgerTests {
         #expect(remaining.map(\.filename) == ["todo.jpg"])
     }
 
+    @Test("completedCount reports how many of a set are already done")
+    func completedCountReflectsLedgerState() async throws {
+        let done = makeItem(name: "done.jpg", bytes: 100)
+        let alsoDone = makeItem(name: "alsoDone.jpg", bytes: 150)
+        let todo = makeItem(name: "todo.jpg", bytes: 200)
+        let ledger = try BackupLedger(directory: temp.url)
+
+        try await ledger.record(
+            done, destination: .androidDevice, state: .confirmedUploaded(at: .now)
+        )
+        try await ledger.record(
+            alsoDone, destination: .androidDevice, state: .confirmedUploaded(at: .now)
+        )
+
+        let count = await ledger.completedCount(among: [done, alsoDone, todo], for: .androidDevice)
+        #expect(count == 2)
+    }
+
+    @Test("markPending forces completed items to be outstanding again")
+    func markPendingForcesReupload() async throws {
+        let item = makeItem(bytes: 100)
+        let ledger = try BackupLedger(directory: temp.url)
+
+        try await ledger.record(
+            item, destination: .androidDevice, state: .confirmedUploaded(at: .now)
+        )
+        #expect(await ledger.isComplete(item.stableKey, for: .androidDevice))
+
+        try await ledger.markPending([item], for: .androidDevice)
+        #expect(await ledger.isComplete(item.stableKey, for: .androidDevice) == false)
+        #expect(await ledger.state(of: item.stableKey, for: .androidDevice) == .pending)
+
+        // The override shouldn't bleed into an unrelated destination for the same item.
+        try await ledger.record(
+            item, destination: .drive, state: .copied(relativePath: "x", at: .now)
+        )
+        #expect(await ledger.isComplete(item.stableKey, for: .drive))
+    }
+
+    @Test("markPending survives a reopen, same as any other write")
+    func markPendingPersists() async throws {
+        let item = makeItem(bytes: 100)
+
+        let first = try BackupLedger(directory: temp.url)
+        try await first.record(
+            item, destination: .androidDevice, state: .confirmedUploaded(at: .now)
+        )
+        try await first.markPending([item], for: .androidDevice)
+
+        let reopened = try BackupLedger(directory: temp.url)
+        #expect(await reopened.isComplete(item.stableKey, for: .androidDevice) == false)
+    }
+
     @Test("A record written after a crash is not swallowed")
     func recoversFromTornFinalLine() async throws {
         // A crash mid-append leaves a fragment with no trailing newline. Merely skipping

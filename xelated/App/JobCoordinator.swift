@@ -65,6 +65,11 @@ final class JobCoordinator {
     var selectedDeviceSerial: String?
     private(set) var adbProblem: String?
 
+    /// How many items in the current scan the ledger already considers done for the
+    /// phone destination — shown so "upload again" can be an explicit choice rather
+    /// than something the person has to guess is even possible.
+    private(set) var androidAlreadyUploadedCount = 0
+
     /// Remembered between launches — the same drive folder usually gets reused.
     private(set) var driveDestination: URL? {
         didSet {
@@ -158,6 +163,7 @@ final class JobCoordinator {
                 }
                 scan = result
                 phase = .scanned
+                refreshAndroidUploadStatus()
             } catch is CancellationError {
                 phase = .idle
             } catch {
@@ -301,11 +307,38 @@ final class JobCoordinator {
                 }
 
                 phase = .androidFinished(pushed: totalPushed, failed: totalFailed)
+                refreshAndroidUploadStatus()
             } catch is CancellationError {
                 phase = .scanned
             } catch {
                 phase = .failed(error.localizedDescription)
             }
+        }
+    }
+
+    /// How many of the current scan's items the ledger already considers done for the
+    /// phone. Refreshed after scanning and after a backup run, not kept live — the
+    /// ledger doesn't change outside those moments.
+    private func refreshAndroidUploadStatus() {
+        guard let androidBackup, !scan.items.isEmpty else {
+            androidAlreadyUploadedCount = 0
+            return
+        }
+        let items = scan.items
+        Task {
+            androidAlreadyUploadedCount = await androidBackup.alreadyUploadedCount(among: items)
+        }
+    }
+
+    /// Explicit override: forget completion for every item in the current scan and
+    /// push them all to the phone again, regardless of what the ledger already says.
+    func forceReuploadToPhone() {
+        guard let androidBackup, !scan.items.isEmpty else { return }
+        let items = scan.items
+        Task {
+            try? await androidBackup.forceReupload(items)
+            androidAlreadyUploadedCount = 0
+            startAndroidBackup()
         }
     }
 

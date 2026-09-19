@@ -84,7 +84,26 @@ actor BackupLedger {
         }
     }
 
+    /// Count of `items` already `isComplete` for `destination` — used to decide whether
+    /// an "upload again" override is worth showing.
+    func completedCount(among items: [MediaItem], for destination: DestinationKind) -> Int {
+        items.count { isComplete($0.stableKey, for: destination) }
+    }
+
     // MARK: - Writing
+
+    /// Forgets completion for these items on this destination, so they're treated as
+    /// pending again on the next run.
+    ///
+    /// An explicit override, not automatic dedupe-avoidance: if the person wants a
+    /// photo re-sent because they deleted it early, or just want to be sure, that's
+    /// their call to make, not something to infer from file state.
+    func markPending(_ items: [MediaItem], for destination: DestinationKind) throws {
+        for item in items {
+            try record(item, destination: destination, state: .pending)
+        }
+        try sync()
+    }
 
     func record(
         _ item: MediaItem,

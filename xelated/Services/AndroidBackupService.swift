@@ -241,4 +241,16 @@ actor AndroidBackupService {
     func outstanding(from items: [MediaItem]) async -> [MediaItem] {
         await ledger.outstanding(from: items, for: .androidDevice)
     }
+
+    /// How many of `items` are already marked done for this destination — used to
+    /// decide whether to offer an "upload again" override.
+    func alreadyUploadedCount(among items: [MediaItem]) async -> Int {
+        await ledger.completedCount(among: items, for: .androidDevice)
+    }
+
+    /// Forces every item back to pending for this destination, so the next backup run
+    /// sends them all again regardless of prior completion.
+    func forceReupload(_ items: [MediaItem]) async throws {
+        try await ledger.markPending(items, for: .androidDevice)
+    }
 }

@@ -119,18 +119,38 @@ struct ContentView: View {
     }
 
     private var footer: some View {
-        HStack {
-            if coordinator.phase.isBusy {
-                Button("Cancel", role: .cancel) { coordinator.cancel() }
+        VStack(alignment: .trailing, spacing: 8) {
+            if coordinator.androidAlreadyUploadedCount > 0 && !coordinator.phase.isBusy {
+                alreadyUploadedNote
             }
-            Spacer()
-            Button("Back Up to Phone") { coordinator.startAndroidBackup() }
-                .disabled(!coordinator.canBackUpToPhone)
-            Button("Back Up to Drive") { coordinator.startDriveBackup() }
-                .keyboardShortcut(.defaultAction)
-                .disabled(!coordinator.canBackUpToDrive)
+            HStack {
+                if coordinator.phase.isBusy {
+                    Button("Cancel", role: .cancel) { coordinator.cancel() }
+                }
+                Spacer()
+                Button("Back Up to Phone") { coordinator.startAndroidBackup() }
+                    .disabled(!coordinator.canBackUpToPhone)
+                Button("Back Up to Drive") { coordinator.startDriveBackup() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!coordinator.canBackUpToDrive)
+            }
         }
         .padding()
+    }
+
+    private var alreadyUploadedNote: some View {
+        HStack {
+            Text(
+                "\(coordinator.androidAlreadyUploadedCount) of \(coordinator.scan.items.count) "
+                + "already sent to a phone"
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            Button("Upload Again") { coordinator.forceReuploadToPhone() }
+                .disabled(!coordinator.canBackUpToPhone)
+                .help("Push every file in this scan to the phone again, ignoring what's already been sent.")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Main content
