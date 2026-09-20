@@ -2,9 +2,10 @@
 
 Transfer photos from a directory to different external drives and Android phones.
 
+<img width="3070" height="1882" alt="CleanShot 2026-09-19 at 19 03 28@2x" src="https://github.com/user-attachments/assets/83c1d017-f787-42c9-af58-dab211bca291" />
+
 Xelated is a small macOS utility for getting a folder of photos and videos onto an
-external drive and/or an Android phone, so the phone's own backup app can pick them up
-and send them to the cloud from there.
+external drive and/or an Android phone.
 
 ## What it does
 
